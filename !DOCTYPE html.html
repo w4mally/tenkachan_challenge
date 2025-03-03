@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>甜花ちゃんチャレンジ</title>
+<style>
+    /* 基本スタイル */
+
+    body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        background-color: #ffe4e1;
+        margin: 0;
+        padding: 0;
+    }
+    h1 {
+        color: #ffb6c1;
+        font-size: 2em;
+        margin: 20px;
+    }
+    #round-display {
+        font-size: 1.2em;
+        color: #555;
+        margin: 10px 0;
+    }
+    #game-container, #game-over-screen {
+        display: none;
+    }
+    #game-container.active, #game-over-screen.active {
+        display: block;
+    }
+    #result {
+        font-size: 1.5em;
+        color: #333;
+        margin: 10px 0;
+    }
+    /* 入力中アンダーラインアニメーション */
+    #nihe {
+        font-size: 2em;
+        color: #555;
+        display: inline-block;
+        padding: 5px;
+    }
+    .underline-blink {
+        border-bottom: 3px solid #555;
+        animation: blink 1s steps(2, start) infinite;
+    }
+    @keyframes blink {
+        0%, 100% { border-color: transparent; }
+        50% { border-color: #555; }
+    }
+    /* ゲームボード */
+    .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 80px);
+        gap: 10px;
+        margin: 20px auto;
+        justify-content: center;
+    }
+    .box {
+        width: 80px;
+        height: 80px;
+        background-color: #f8cdd7;
+        border-radius: 8px;
+        font-size: 1.5em;
+        font-weight: bold;
+        color: #333;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        cursor: pointer;
+    }
+    .revealed {
+        background-color: #fff;
+    }
+    /* 選択されたボックスの縁 */
+    .selected {
+        border: 3px solid red;
+    }
+    /* レア文字の青い星 */
+.rare-box::before,
+.rare-box::after {
+    content: "★";
+    font-size: 10px;
+    color: blue;
+    position: absolute;
+    opacity: 0;             /* 初期は非表示 */
+    transition: opacity 0.3s;
+}
+.rare-box::before {
+    top: 5px;
+    left: 5px;
+}
+.rare-box::after {
+    bottom: 5px;
+    right: 5px;
+}
+/* ボックスが開いたとき(revealedクラス追加時)に青星を表示 */
+.rare-box.revealed::before,
+.rare-box.revealed::after {
+    opacity: 1;
+}
+    }
+    /* ゲームオーバー画面 */
+    #game-over-screen {
+        font-size: 1.5em;
+        color: #333;
+        margin-top: 50px;
+    }
+    #game-over-result {
+        font-size: 1.2em;
+        margin: 20px 0;
+    }
+    #game-over-length {
+        font-size: 1em;
+        color: #666;
+    }
+    .button {
+        background-color: #ffb6c1;
+        color: #fff;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 1em;
+        margin: 10px;
+        text-decoration: none;
+    }
+</style>
+</head>
+<body>
+
+<h1>甜花ちゃんチャレンジ</h1>
+<div id="round-display">ラウンド1</div>
+<div id="result"><span id="nihe" class="underline-blink">_...</span></div>
+
+<div id="game-container" class="active">
+    <div class="grid" id="grid">
+        <!-- ボックスがここに挿入される -->
+    </div>
+</div>
+
+<div id="game-over-screen">
+    <h2>ゲームオーバー</h2>
+    <p id="game-over-result"></p>
+    <p id="game-over-length"></p> <!-- 文字数表示 -->
+    <a id="tweet-button" class="button" target="_blank">Twitterでシェア</a>
+    <button class="button" onclick="initializeGame()">もう一度</button>
+</div>
+
+<script>
+    let heCount = 0; // 使わなくても問題なければ削除可
+let resultStr = ""; // 初期結果文字列（下線部分には何も追加しない）
+let roundCount = 1; // ラウンドカウント
+    const resultElement = document.getElementById("result");
+    const niheElement = document.getElementById("nihe");
+    const roundDisplay = document.getElementById("round-display");
+    const gameContainer = document.getElementById("game-container");
+    const gameOverScreen = document.getElementById("game-over-screen");
+    const gameOverResult = document.getElementById("game-over-result");
+    const gameOverLength = document.getElementById("game-over-length"); // 文字数表示要素
+    const tweetButton = document.getElementById("tweet-button");
+
+    const rareCharacters = ["い", "え", "ね", "ひ", "しぇ", "にぇ"]; // レア文字のリスト
+
+    // ゲームの初期化
+function initializeGame() {
+    heCount = 0;  // 不要なら削除可
+    resultStr = "に";
+    roundCount = 1;
+    updateRoundDisplay();
+    niheElement.textContent = resultStr + "...";
+    niheElement.classList.add("underline-blink");
+    gameContainer.classList.add("active");
+    gameOverScreen.classList.remove("active");
+    generateBoxes();
+}
+    // ラウンド表示を更新
+    function updateRoundDisplay() {
+        roundDisplay.textContent = `ラウンド${roundCount}`;
+    }
+
+    // 9個のボックスを生成し、ランダムに配置
+    function generateBoxes() {
+        const gridElement = document.getElementById("grid");
+        gridElement.innerHTML = ""; // リセット
+
+        const rareCount = determineRareCount(); // ランダムで1~3個のレア文字を選択
+        const selectedRares = selectUniqueItems(rareCharacters, rareCount);
+let heCountForRound = 9 - (selectedRares.length + 1); // ENDを含めて9個に調整
+let items = ["END", ...selectedRares];
+for (let i = 0; i < heCountForRound; i++) items.push("へ");
+        items = shuffleArray(items);
+
+        items.forEach((item) => {
+            const box = document.createElement("div");
+            box.classList.add("box");
+            box.dataset.value = item;
+            if (selectedRares.includes(item)) {
+                box.classList.add("rare-box"); // レア文字ボックスの装飾
+            }
+            box.addEventListener("click", () => revealBox(box, items));
+            gridElement.appendChild(box);
+        });
+
+updateRoundDisplay();
+roundCount++; // ラウンド表示更新後にカウントを増やす
+    }
+
+    // ランダムで1~3個のレア文字数を決定
+    function determineRareCount() {
+        const chance = Math.random();
+        if (chance < 0.1) return 3;
+        if (chance < 0.4) return 2;
+        return 1;
+    }
+
+    // 指定数のユニークなレア文字を選択
+    function selectUniqueItems(array, count) {
+        const shuffled = shuffleArray([...array]);
+        return shuffled.slice(0, count);
+    }
+
+    // 配列をシャッフル
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+// ボックスを開ける
+function revealBox(selectedBox, items) {
+    if (selectedBox.classList.contains("revealed")) return; // 二重クリック防止
+    selectedBox.classList.add("revealed", "selected"); // 開けたボックスに赤い縁を追加
+
+    const value = selectedBox.dataset.value;
+
+if (value === "END") {
+    setTimeout(() => {
+        showGameOverScreen();
+    }, 1000);
+    revealAllBoxes(items);
+} else {
+    resultStr += value;  // 選ばれた文字をそのまま連結
+    niheElement.textContent = resultStr + "...";
+    niheElement.classList.add("underline-blink"); // 点滅効果を維持
+    revealAllBoxes(items);
+    setTimeout(generateBoxes, 1000); // 次のラウンドに進む
+}
+
+    selectedBox.textContent = value; // ← **ボックス内の文字を最後にセット**
+}
+
+    // 「にへへ...」の表示を更新し、最後の文字だけにアンダーラインを点滅させる
+
+
+
+    // ゲームオーバー画面を表示
+function showGameOverScreen() {
+ const finalText = resultStr + "...";
+    gameContainer.classList.remove("active");
+    gameOverScreen.classList.add("active");
+    gameOverResult.textContent = `あなたの結果: ${finalText}`;
+    gameOverLength.textContent = `（${resultStr.length}文字）`;
+    tweetButton.href = generateTwitterLink(finalText);
+}
+    // Twitterリンクを生成
+    function generateTwitterLink(resultText) {
+        const url = "https://yourgameurl.com";
+        const hashtag = "甜花ちゃんチャレンジ";
+        const text = `${resultText} #${hashtag}`;
+        return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+    }
+
+    // 全ボックスを開ける
+    function revealAllBoxes(items) {
+        const boxes = document.querySelectorAll(".box");
+        boxes.forEach((box, index) => {
+            box.textContent = items[index];
+            box.classList.add("revealed");
+        });
+    }
+
+    // 初期化実行
+    initializeGame();
+</script>
+
+</body>
+</html>
